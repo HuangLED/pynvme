@@ -50,7 +50,7 @@
 #include "driver.h"
 #include "intr_mgt.h"
 
-
+/*-------------------------------------------------Marco Defination----------------------------------------- */
 #define MAX_CMD_LOG_QPAIR_COUNT (32)
 #define MAX_CMD_LOG_QPAIR_COUNT_SHIFT (5)
 
@@ -60,11 +60,10 @@
 #define DCFG_VERIFY_READ      (BIT(0))
 #define DCFG_ENABLE_MSIX      (BIT(1))
 
-
+/*--------------------------------------Private Data Structure Defination----------------------------------- */
 static uint64_t* g_driver_io_token_ptr = NULL;
 static uint64_t* g_driver_config_ptr = NULL;
-
-
+/*--------------------------------------Interface Defination---------------------------------------- */
 static uint32_t timeval_to_us(struct timeval* t)
 {
   return t->tv_sec*US_PER_S + t->tv_usec;
@@ -778,6 +777,52 @@ int nvme_send_cmd_raw(struct spdk_nvme_ctrlr* ctrlr,
   return rc;
 }
 
+static inline bool nvme_is_reset_done(struct spdk_nvme_ctrlr* ctrlr)
+{
+  unsigned int raw_val = 0;
+
+  nvme_get_reg32(ctrlr, offsetof(struct spdk_nvme_registers, csts), &raw_val);
+
+  return ((raw_val & BIT(0)) == 0);
+}
+
+static void nvme_controller_level_reset(struct spdk_nvme_ctrlr* ctrlr)
+{
+  unsigned int raw_val = 0;
+
+  nvme_get_reg32(ctrlr, offsetof(struct spdk_nvme_registers, cc), &raw_val);
+  raw_val |= BIT(0);
+
+  nvme_set_reg32(ctrlr, offsetof(struct spdk_nvme_registers, cc), raw_val);
+}
+
+static void nvme_subsystem_reset(struct spdk_nvme_ctrlr* ctrlr)
+{
+
+}
+
+void nvme_reset_dispatch(struct spdk_nvme_ctrlr* ctrlr, rst_type reset_type)
+{
+  switch(reset_type)
+  {
+    case rst_cc_type :
+      nvme_controller_level_reset(ctrlr);
+      break;
+    case rst_subsystem_type :
+      nvme_subsystem_reset(ctrlr);
+      break;
+    default :
+      assert(0);
+      break;
+  }
+  
+  ctrlr->is_resetting = true;
+}
+
+inline void nvme_reset_done(struct spdk_nvme_ctrlr* ctrlr)
+{
+  ctrlr->is_resetting = false;
+}
 
 void nvme_register_aer_cb(struct spdk_nvme_ctrlr* ctrlr,
                           spdk_nvme_aer_cb aer_cb,
@@ -1313,6 +1358,20 @@ static int ioworker_send_one(struct spdk_nvme_ns* ns,
   return 0;
 }
 
+static inline int ioworker_reset_handler(struct spdk_nvme_qpair* qpair)
+{
+  struct spdk_nvme_ctrlr* ctrlr = NULL;
+  int ret = 0;
+  assert(qpair != NULL);
+  ctrlr = qpair->ctrlr;
+
+  spdk_nvme_qpair_process_completions(qpair, 0);
+  if (!nvme_is_reset_done(ctrlr))
+  {
+    ret = -1;
+  }
+  return ret;
+}
 
 int ioworker_entry(struct spdk_nvme_ns* ns,
                    struct spdk_nvme_qpair *qpair,
@@ -1324,6 +1383,7 @@ int ioworker_entry(struct spdk_nvme_ns* ns,
   uint32_t sector_size = spdk_nvme_ns_get_sector_size(ns);
   struct timeval test_start;
   struct ioworker_global_ctx gctx;
+  struct spdk_nvme_ctrlr* ctrlr = NULL;
   struct ioworker_io_ctx* io_ctx = malloc(sizeof(struct ioworker_io_ctx)*args->qdepth);
 
   assert(ns != NULL);
@@ -1339,6 +1399,7 @@ int ioworker_entry(struct spdk_nvme_ns* ns,
   rets->mseconds = 0;
   rets->error = 0;
 
+  ctrlr = qpair->ctrlr;
   SPDK_DEBUGLOG(SPDK_LOG_NVME, "args.lba_start = %ld\n", args->lba_start);
   SPDK_DEBUGLOG(SPDK_LOG_NVME, "args.lba_size = %d\n", args->lba_size);
   SPDK_DEBUGLOG(SPDK_LOG_NVME, "args.lba_align = %d\n", args->lba_align);
@@ -1449,13 +1510,26 @@ int ioworker_entry(struct spdk_nvme_ns* ns,
     SPDK_DEBUGLOG(SPDK_LOG_NVME, "sent %ld cplt %ld, finish %d, head %p\n",
                   gctx.io_count_sent, gctx.io_count_cplt,
                   gctx.flag_finish, head_io);
-    
+    //If controller is in reseting, ioworker should not send req to do IO proccess
+    //ioworker will polling ctsc.rdy == 0. if rdy == 0, controller reset done. 
+    //then app is able to delete the corresponding qpair to finish reset handler.
+    if (ctrlr->is_resetting)
+    {
+      if (ioworker_reset_handler(qpair))
+      {
+        continue;
+      }
+      else
+      {
+        break;
+      }
+    }
     // check time and send all pending io
     while (head_io && timercmp(&now, &head_io->time_sent, >))
     {
       ioworker_send_one(ns, qpair, head_io, &gctx);
       STAILQ_REMOVE_HEAD(&gctx.pending_io_list, next);
-      head_io = STAILQ_FIRST(&gctx.pending_io_list);      
+      head_io = STAILQ_FIRST(&gctx.pending_io_list);
     }
 
     //exceed 30 seconds more than the expected test time, abort ioworker

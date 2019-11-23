@@ -46,6 +46,12 @@ typedef struct spdk_nvme_ns namespace;
 typedef struct spdk_pci_device pcie;
 typedef struct spdk_nvme_cpl cpl;
 
+typedef enum
+{
+  rst_cc_type,
+  rst_subsystem_type,
+  rst_max
+} rst_type;
 
 typedef struct ioworker_args
 {
@@ -173,7 +179,7 @@ extern void log_cmd_dump(struct spdk_nvme_qpair* qpair, size_t count);
 extern void log_cmd_dump_admin(struct spdk_nvme_ctrlr* ctrlr, size_t count);
 
 extern const char* cmd_name(uint8_t opc, int set);
-
+extern void nvme_reset_dispatch(struct spdk_nvme_ctrlr* ctrlr, rst_type reset_type);
 extern void intc_clear(struct spdk_nvme_qpair* q);
 extern bool intc_isset(struct spdk_nvme_qpair* q);
 extern void intc_mask(struct spdk_nvme_qpair* q);
