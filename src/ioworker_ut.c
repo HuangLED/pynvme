@@ -64,6 +64,11 @@ void buffer_fini(void* buf)
   
 }
 
+uint64_t driver_config_read(void)
+{
+  
+}
+
 int
 spdk_nvme_qpair_process_completions(struct spdk_nvme_qpair *qpair, uint32_t max_completions)
 {
