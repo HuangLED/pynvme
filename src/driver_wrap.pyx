@@ -375,6 +375,12 @@ cdef class Subsystem(object):
     def reset(self):
         """reset the nvme subsystem through register nssr.nssrc"""
 
+        # notify ioworker to terminate, and wait all IO Qpair closed
+        config(ioworker_terminate=True)
+        while d.driver_io_qpair_count(self._nvme._ctrlr):
+            pass
+        config(ioworker_terminate=False)
+        
         # nssr.nssrc: nvme subsystem reset
         logging.debug("nvme subsystem reset by NSSR.NSSRC")
         self._nvme[0x20] = 0x4e564d65  # "NVMe"
@@ -454,6 +460,7 @@ cdef class Pcie(object):
         
     def reset(self):
         """reset this pcie device"""
+
         vid = self.vid
         did = self.did
         vdid = '%04x %04x' % (vid, did)
@@ -462,6 +469,12 @@ cdef class Pcie(object):
         bdf = self._nvme._bdf.decode('utf-8')
         logging.debug("pci reset %s on %s" % (vdid, bdf))
 
+        # notify ioworker to terminate, and wait all IO Qpair closed
+        config(ioworker_terminate=True)
+        while d.driver_io_qpair_count(self._nvme._ctrlr):
+            pass
+        config(ioworker_terminate=False)
+        
         # hot reset by TS1 TS2
         subprocess.call('./src/pcie_hot_reset.sh %s 2> /dev/null || true' % bdf, shell=True)
 
@@ -749,7 +762,14 @@ cdef class Controller(object):
             Test scripts should delete all io qpairs before reset!
         """
 
+        # notify ioworker to terminate, and wait all IO Qpair closed
+        config(ioworker_terminate=True)
+        while d.driver_io_qpair_count(self._ctrlr):
+            pass
+        config(ioworker_terminate=False)
+        
         # reset controller
+        time.sleep(0.1)
         self._reinit()
 
     def cmdname(self, opcode):

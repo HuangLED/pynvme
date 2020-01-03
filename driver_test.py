@@ -558,6 +558,48 @@ def test_dsm_trim_and_read(nvme0, nvme0n1):
     nvme0n1.dsm(q, buf, 1).waitdone()
 
 
+def test_ioworker_subsystem_reset_async(nvme0n1, subsystem):
+    for i in range(2):
+        start_time = time.time()
+        with nvme0n1.ioworker(io_size=8, time=100):
+            time.sleep(5)
+            subsystem.reset()
+        # terminated by power cycle
+        assert time.time()-start_time < 25
+
+    with nvme0n1.ioworker(io_size=8, time=10):
+        pass
+    subsystem.reset()
+
+
+def test_ioworker_pcie_reset_async(nvme0n1, pcie):
+    for i in range(2):
+        start_time = time.time()
+        with nvme0n1.ioworker(io_size=8, time=100):
+            time.sleep(5)
+            pcie.reset()
+        # terminated by power cycle
+        assert time.time()-start_time < 25
+
+    with nvme0n1.ioworker(io_size=8, time=10):
+        pass
+    pcie.reset()
+
+    
+def test_ioworker_controller_reset_async(nvme0n1, nvme0):
+    for i in range(2):
+        start_time = time.time()
+        with nvme0n1.ioworker(io_size=8, time=100):
+            time.sleep(5)
+            nvme0.reset()
+        # terminated by power cycle
+        assert time.time()-start_time < 25
+
+    with nvme0n1.ioworker(io_size=8, time=10):
+        pass
+    nvme0.reset()
+    
+    
 def test_ioworker_power_cycle_async(nvme0n1, subsystem):
     for i in range(2):
         start_time = time.time()
@@ -565,7 +607,7 @@ def test_ioworker_power_cycle_async(nvme0n1, subsystem):
             time.sleep(5)
             subsystem.power_cycle(10)
         # terminated by power cycle
-        assert time.time()-start_time < 23
+        assert time.time()-start_time < 25
 
     with nvme0n1.ioworker(io_size=8, time=10):
         pass
