@@ -20,6 +20,7 @@ checkin_test:
     - cd ./spdk/app/nvmf_tgt; make; cd ../../../
     - sudo python3 -B -m pytest driver_test.py::test_ioworker_iops_multiple_queue_fob[1] --pciaddr=01:00.0
     - sudo python3 -B -m pytest driver_test.py::test_ioworker_iops_multiple_queue[1] --pciaddr=10.24.48.17
+    - sudo python3 -B -m pytest driver_test.py::test_ioworker_power_cycle_async --pciaddr=01:00.0
     - cd src; make unittest
 
 stress_test:
@@ -32,7 +33,7 @@ stress_test:
     expire_in: 5 yrs
   script:
     - make test
-    - cat test.log | grep "487 passed in" || exit -1
+    - cat test.log | grep "488 passed in" || exit -1
 
 scripts_test:
   only:
