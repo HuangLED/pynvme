@@ -175,4 +175,4 @@ cdef extern from "driver.h":
     void intc_unmask(qpair * q)
 
     void driver_srand(unsigned int seed)
-    
+    unsigned int driver_io_qpair_count(ctrlr* c)

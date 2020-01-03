@@ -333,11 +333,17 @@ cdef class Subsystem(object):
             sec (int): the seconds between power off and power on
         """
 
+        # notify ioworker to terminate, and wait all IO Qpair closed
+        config(ioworker_terminate=True)
+        while d.driver_io_qpair_count(self._nvme._ctrlr):
+            pass
+        config(ioworker_terminate=False)
+        
         # use S3/suspend to power off nvme device, and use rtc to power on again
         logging.debug("power off nvme device for %d seconds" % sec)
         subprocess.call("sudo rtcwake -m mem -s %d 1>/dev/null 2>/dev/null" % sec, shell=True)
         logging.debug("power is back")
-
+        
         #reset driver
         self._nvme.reset()
 
@@ -2094,18 +2100,20 @@ class _IOWorker(object):
             import gc; gc.collect()
 
 
-def config(verify, fua_read=False, fua_write=False):
+def config(verify=False, fua_read=False, fua_write=False, ioworker_terminate=False):
     """config driver global setting
 
     # Parameters
         verify (bool): enable inline checksum verification of read
         fua_read (bool): enable FUA of read. Default: False
         fua_write (bool): enable FUA of write. Default: False
+        ioworker_terminate (bool): notify ioworker to terminate immediately. Default: False
     """
 
     return d.driver_config((verify << 0) |
-                           (fua_read << 1) |
-                           (fua_write << 2))
+                           (fua_read << 2) |
+                           (fua_write << 3) |
+                           (ioworker_terminate << 4))
 
 
 def srand(seed):

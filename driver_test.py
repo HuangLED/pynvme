@@ -558,6 +558,20 @@ def test_dsm_trim_and_read(nvme0, nvme0n1):
     nvme0n1.dsm(q, buf, 1).waitdone()
 
 
+def test_ioworker_power_cycle_async(nvme0n1, subsystem):
+    for i in range(2):
+        start_time = time.time()
+        with nvme0n1.ioworker(io_size=8, time=100):
+            time.sleep(5)
+            subsystem.power_cycle(10)
+        # terminated by power cycle
+        assert time.time()-start_time < 23
+
+    with nvme0n1.ioworker(io_size=8, time=10):
+        pass
+    subsystem.power_cycle(10)
+    
+        
 def test_timeout_command_completion(nvme0, nvme0n1):
     def format_timeout_cb(cdw0, status1):
         # timeout command, cpl all 1

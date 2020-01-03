@@ -545,6 +545,13 @@ int ioworker_entry(struct spdk_nvme_ns* ns,
       break;
     }
 
+    // check terminate signal from main process
+    if ((driver_config_read() & DCFG_IOW_TERM) != 0)
+    {
+      SPDK_DEBUGLOG(SPDK_LOG_NVME, "force termimate ioworker\n");
+      break;
+    }
+    
     // collect completions
     spdk_nvme_qpair_process_completions(qpair, 0);
 

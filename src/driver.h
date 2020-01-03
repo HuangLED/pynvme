@@ -65,6 +65,13 @@
 // reserved one slot space for tail value
 #define CMD_LOG_DEPTH              (2048)
 
+// the global configuration of the driver
+#define DCFG_VERIFY_READ      (BIT(0))
+#define DCFG_ENABLE_MSIX      (BIT(1))
+#define DCFG_FUA_READ         (BIT(2))
+#define DCFG_FUA_WRITE        (BIT(3))
+#define DCFG_IOW_TERM         (BIT(4))
+
 
 typedef struct spdk_nvme_qpair qpair;
 typedef struct spdk_nvme_ctrlr ctrlr;
@@ -115,7 +122,9 @@ extern int ioworker_entry(namespace* ns,
 extern int driver_init(void);
 extern int driver_fini(void);
 extern uint64_t driver_config(uint64_t cfg_word);
+extern uint64_t driver_config_read(void);
 extern void driver_srand(unsigned int seed);
+extern uint32_t driver_io_qpair_count(struct spdk_nvme_ctrlr* ctrlr);
 
 extern pcie* pcie_init(struct spdk_nvme_ctrlr* ctrlr);
 extern int pcie_cfg_read8(struct spdk_pci_device* pci,
