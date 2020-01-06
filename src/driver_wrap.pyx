@@ -52,6 +52,7 @@ import signal
 import struct
 import random
 import logging
+import quarchpy
 import warnings
 import datetime
 import statistics
@@ -325,7 +326,21 @@ cdef class Subsystem(object):
 
     def __cinit__(self, Controller nvme):
         self._nvme = nvme
+        self._pwr_module = quarchpy.quarchDevice("SERIAL:/dev/ttyUSB0")
+ 
+    def __dealloc__(self):
+        self._pwr_module.closeConnection()
+        
+    def poweron(self):
+        if "PULLED" == self._pwr_module.sendCommand("run:power?"):
+            logging.info("power on")
+            self._pwr_module.sendCommand("run:power up")
 
+    def poweroff(self):
+        if "PULLED" != self._pwr_module.sendCommand("run:power?"):
+            logging.info("power off")
+            self._pwr_module.sendCommand("run:power down")
+            
     def power_cycle(self, sec=10):
         """power off and on in seconds
 
