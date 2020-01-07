@@ -52,7 +52,6 @@ import signal
 import struct
 import random
 import logging
-import quarchpy
 import warnings
 import datetime
 import statistics
@@ -329,6 +328,7 @@ cdef class Subsystem(object):
  
     def poweron(self):
         # power on by power module
+        import quarchpy
         pwr = quarchpy.quarchDevice("SERIAL:/dev/ttyUSB0")
         if "PULLED" == pwr.sendCommand("run:power?"):
             logging.info("power on")
@@ -355,6 +355,7 @@ cdef class Subsystem(object):
         subprocess.call('echo 1 > "/sys/bus/pci/devices/%s/remove" 2> /dev/null || true' % bdf, shell=True)
 
         # power off by power module
+        import quarchpy
         pwr = quarchpy.quarchDevice("SERIAL:/dev/ttyUSB0")
         if "PULLED" != pwr.sendCommand("run:power?"):
             logging.info("power off")
