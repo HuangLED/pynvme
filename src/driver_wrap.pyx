@@ -326,20 +326,40 @@ cdef class Subsystem(object):
 
     def __cinit__(self, Controller nvme):
         self._nvme = nvme
-        self._pwr_module = quarchpy.quarchDevice("SERIAL:/dev/ttyUSB0")
  
-    def __dealloc__(self):
-        self._pwr_module.closeConnection()
-        
     def poweron(self):
-        if "PULLED" == self._pwr_module.sendCommand("run:power?"):
+        # power on by power module
+        pwr = quarchpy.quarchDevice("SERIAL:/dev/ttyUSB0")
+        if "PULLED" == pwr.sendCommand("run:power?"):
             logging.info("power on")
-            self._pwr_module.sendCommand("run:power up")
+            pwr.sendCommand("run:power up")
+        pwr.closeConnection()
+
+        # remove kernel driver before rescan pcie devices
+        subprocess.call('rmmod nvme 2> /dev/null || true', shell=True)
+        subprocess.call('rmmod nvme_core 2> /dev/null || true', shell=True)
+        subprocess.call('echo 1 > "/sys/bus/pci/rescan" 2> /dev/null || true', shell=True)
+
+        # reset controller
+        self._nvme._reinit()
 
     def poweroff(self):
-        if "PULLED" != self._pwr_module.sendCommand("run:power?"):
+        # notify ioworker to terminate, and wait all IO Qpair closed
+        config(ioworker_terminate=True)
+        while d.driver_io_qpair_count(self._nvme._ctrlr):
+            pass
+        config(ioworker_terminate=False)
+        
+        # remove device before power off
+        bdf = self._nvme._bdf.decode('utf-8')
+        subprocess.call('echo 1 > "/sys/bus/pci/devices/%s/remove" 2> /dev/null || true' % bdf, shell=True)
+
+        # power off by power module
+        pwr = quarchpy.quarchDevice("SERIAL:/dev/ttyUSB0")
+        if "PULLED" != pwr.sendCommand("run:power?"):
             logging.info("power off")
-            self._pwr_module.sendCommand("run:power down")
+            pwr.sendCommand("run:power down")
+        pwr.closeConnection()
             
     def power_cycle(self, sec=10):
         """power off and on in seconds
@@ -360,7 +380,7 @@ cdef class Subsystem(object):
         logging.debug("power is back")
         
         #reset driver
-        self._nvme.reset()
+        self._nvme._reinit()
 
     def shutdown_notify(self, abrupt=False):
         """notify nvme subsystem a shutdown event through register cc.chn
