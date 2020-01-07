@@ -333,12 +333,14 @@ cdef class Subsystem(object):
         if "PULLED" == pwr.sendCommand("run:power?"):
             logging.info("power on")
             pwr.sendCommand("run:power up")
+        while "PULLED" == pwr.sendCommand("run:power?"): pass
         pwr.closeConnection()
+        time.sleep(1)  #TODO: how to check power is stable
 
         # remove kernel driver before rescan pcie devices
         subprocess.call('rmmod nvme 2> /dev/null || true', shell=True)
         subprocess.call('rmmod nvme_core 2> /dev/null || true', shell=True)
-        subprocess.call('echo 1 > "/sys/bus/pci/rescan" 2> /dev/null || true', shell=True)
+        subprocess.call('echo 1 > /sys/bus/pci/rescan 2> /dev/null || true', shell=True)
 
         # reset controller
         self._nvme._reinit()
@@ -360,6 +362,7 @@ cdef class Subsystem(object):
         if "PULLED" != pwr.sendCommand("run:power?"):
             logging.info("power off")
             pwr.sendCommand("run:power down")
+        while "PULLED" != pwr.sendCommand("run:power?"): pass
         pwr.closeConnection()
             
     def power_cycle(self, sec=10):
@@ -664,7 +667,7 @@ cdef class Controller(object):
                 port = 0
 
         # pcie address, start with domain
-        if port == 0 and not os.path.exists("/sys/bus/pci/devices/%s" % addr):
+        if port == 0 and not os.path.exists("/sys/bus/pci/devices/%s" % addr) and not addr.startswith("0000:"):
             addr = "0000:"+addr
             
         bdf = addr.encode('utf-8')
